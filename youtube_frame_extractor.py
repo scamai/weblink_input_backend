@@ -1,9 +1,8 @@
 import os
 import sys
 import cv2
-from pytube import YouTube
 
-def get_video_stream(url, max_retries=3):
+def get_video_stream(url, max_retries=1):
     import time
     from urllib.parse import urlparse
     import random
@@ -28,6 +27,8 @@ def get_video_stream(url, max_retries=3):
             platform = 'tiktok'
         elif 'clapperapp' in domain:
             platform = 'clapper'
+        elif 'bilibili.com' in domain or 'b23.tv' in domain:
+            platform = 'bilibili'
         else:
             platform = 'generic'
             
@@ -57,10 +58,17 @@ def get_video_stream(url, max_retries=3):
                     'no_playlist': True,
                 })
             elif platform == 'tiktok':
-                 ydl_opts.update({
+                ydl_opts.update({
                     'no_playlist': True,
                 })
+            elif platform == 'bilibili':
+                 ydl_opts.update({
+                    'extract_flat': True,
+                    'no_playlist': True,
+                    'prefer_multi_flv': True,
+                })
             
+            print('starting yt-dlp')
             # Create yt-dlp object with options
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 # Extract video information
@@ -69,6 +77,12 @@ def get_video_stream(url, max_retries=3):
                 if not info:
                     raise Exception("Could not extract video information")
                 
+                # Debugging for specific platforms
+                if platform == 'bilibili':
+                    print("bilibili special handling of url info")
+                    print(info)
+                    video_url = info['formats'][0]['url']
+                    print("facebook special handling of url info")
                 if platform == 'tiktok':
                     print("tiktok special handling of url info")
                     print(info)
@@ -201,7 +215,8 @@ def test_frame_extraction(platform=None):
         'tiktok': "https://www.tiktok.com/@willsmith/video/7481699258819693870",
         'facebook': "https://www.facebook.com/reel/560811526820435",
         'general_website': "https://www.pornhub.com/view_video.php?viewkey=670e028ceb11d",
-        'clapper': "https://clapperapp.com/video/GE8opqZnYBgzYne9"
+        'clapper': "https://clapperapp.com/video/GE8opqZnYBgzYne9",
+        'bilibili': "https://www.bilibili.com/video/BV1YG4y17713"
     }
     base_test_folder = os.path.join(os.path.dirname(__file__), 'saved_frames')
     os.makedirs(base_test_folder, exist_ok=True)

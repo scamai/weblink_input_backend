@@ -12,6 +12,7 @@ A powerful tool for extracting frames from videos across multiple social media p
 - ✅ Clapper
 - 🚧 TikTok (In Progress)
 - 🚧 X/Twitter (In Progress)
+- 🚧 Bilibili (In Progress)
 
 ### Features
 - Automatic platform detection from URLs
