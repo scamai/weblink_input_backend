@@ -1,0 +1,12 @@
+# Ignore generated image files
+saved_frames/**/*.jpg
+saved_frames/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
