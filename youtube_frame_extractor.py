@@ -26,6 +26,8 @@ def get_video_stream(url, max_retries=3):
             platform = 'instagram'
         elif 'tiktok.com' in domain:
             platform = 'tiktok'
+        elif 'clapperapp' in domain:
+            platform = 'clapper'
         else:
             platform = 'generic'
             
@@ -198,7 +200,8 @@ def test_frame_extraction(platform=None):
         'youtube': "https://www.youtube.com/watch?v=lb-B2zi9DtY",
         'tiktok': "https://www.tiktok.com/@willsmith/video/7481699258819693870",
         'facebook': "https://www.facebook.com/reel/560811526820435",
-        'general_website': "https://www.pornhub.com/view_video.php?viewkey=670e028ceb11d", 
+        'general_website': "https://www.pornhub.com/view_video.php?viewkey=670e028ceb11d",
+        'clapper': "https://clapperapp.com/video/GE8opqZnYBgzYne9"
     }
     base_test_folder = os.path.join(os.path.dirname(__file__), 'saved_frames')
     os.makedirs(base_test_folder, exist_ok=True)
@@ -256,7 +259,7 @@ if __name__ == "__main__":
         import sys
         # Get platform from command line arguments
         platform = None
-        if len(sys.argv) > 2 and sys.argv[2] in ['youtube', 'facebook', 'tiktok']:
+        if len(sys.argv) > 2:
             platform = sys.argv[2]
         test_frame_extraction(platform)
     else:

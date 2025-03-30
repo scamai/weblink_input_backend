@@ -9,6 +9,7 @@ A powerful tool for extracting frames from videos across multiple social media p
 - ✅ Facebook
 - ✅ Instagram
 - ✅ Pornhub
+- ✅ Clapper
 - 🚧 TikTok (In Progress)
 - 🚧 X/Twitter (In Progress)
 
