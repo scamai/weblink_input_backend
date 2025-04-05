@@ -1,42 +1,34 @@
 import os
 import sys
 import cv2
+import yt_dlp
+from frame_extractors.common_utils import download_media, extract_frames_from_video, process_as_image, identify_platform
+from frame_extractors.tiktok_frame_extractor import get_tiktok_stream, extract_tiktok_frames
+from frame_extractors.bilibili_frame_extractor import get_bilibili_stream, extract_bilibili_frames
+from frame_extractors.x_frame_extractor import get_twitter_stream, extract_twitter_frames
 
-def get_video_stream(url, max_retries=1):
+def get_video_stream(url, max_retries=3):
+    """Get video stream URL for various platforms"""
     import time
     from urllib.parse import urlparse
     import random
-    import yt_dlp
     
     # Validate URL format and identify platform
-    try:
-        parsed = urlparse(url)
-        if not all([parsed.scheme, parsed.netloc]):
-            print("Invalid URL format")
-            return None
-            
-        # Identify platform from URL
-        domain = parsed.netloc.lower()
-        if 'youtube.com' in domain or 'youtu.be' in domain:
-            platform = 'youtube'
-        elif 'facebook.com' in domain or 'fb.com' in domain:
-            platform = 'facebook'
-        elif 'instagram.com' in domain:
-            platform = 'instagram'
-        elif 'tiktok.com' in domain:
-            platform = 'tiktok'
-        elif 'clapperapp' in domain:
-            platform = 'clapper'
-        elif 'bilibili.com' in domain or 'b23.tv' in domain:
-            platform = 'bilibili'
-        else:
-            platform = 'generic'
-            
-        print(f"Detected platform: {platform}")
-    except Exception as e:
-        print(f"URL validation error: {str(e)}")
+    platform = identify_platform(url)
+    if not platform:
         return None
+        
+    print(f"Detected platform: {platform}")
     
+    # Delegate to platform-specific extractors
+    if platform == 'tiktok':
+        return get_tiktok_stream(url, max_retries)
+    elif platform == 'bilibili':
+        return get_bilibili_stream(url, max_retries)
+    elif platform == 'twitter':
+        return get_twitter_stream(url, max_retries)
+    
+    # Handle YouTube and other platforms
     for attempt in range(max_retries):
         try:
             # Configure yt-dlp options based on platform
@@ -45,6 +37,13 @@ def get_video_stream(url, max_retries=1):
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,  # Need full extraction for some platforms
+                # Add browser headers to avoid 403 errors
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Connection': 'keep-alive',
+                },
             }
             
             # Add platform-specific options
@@ -57,16 +56,6 @@ def get_video_stream(url, max_retries=1):
                     'extract_flat': True,
                     'no_playlist': True,
                 })
-            elif platform == 'tiktok':
-                ydl_opts.update({
-                    'no_playlist': True,
-                })
-            elif platform == 'bilibili':
-                 ydl_opts.update({
-                    'extract_flat': True,
-                    'no_playlist': True,
-                    'prefer_multi_flv': True,
-                })
             
             print('starting yt-dlp')
             # Create yt-dlp object with options
@@ -77,32 +66,40 @@ def get_video_stream(url, max_retries=1):
                 if not info:
                     raise Exception("Could not extract video information")
                 
-                # Debugging for specific platforms
-                if platform == 'bilibili':
-                    print("bilibili special handling of url info")
-                    print(info)
-                    video_url = info['formats'][0]['url']
-                    print("facebook special handling of url info")
-                if platform == 'tiktok':
-                    print("tiktok special handling of url info")
-                    print(info)
-                    video_url = info['formats'][0]['url']
-                    print('info formats')
-                    print(info['formats'])
-                    print('first ')
-                    print(f"tiktok video url: {video_url}")
-                    return video_url  
-
-                # Get the video URL
+                # Check if this is an image post rather than a video
+                if 'entries' in info and info.get('_type') == 'playlist':
+                    # Some platforms return playlists for posts with images
+                    for entry in info['entries']:
+                        if entry.get('_type') == 'image':
+                            print("Detected image post")
+                            if 'url' in entry:
+                                return entry['url']
+                            elif 'thumbnail' in entry:
+                                return entry['thumbnail']
+                
+                # Store platform in the return value for special handling
+                result = {'platform': platform}
+                
+                # General handling for YouTube and other platforms
                 if 'url' in info:
-                    return info['url']
+                    result['url'] = info['url']
+                    return result
                 elif 'formats' in info and len(info['formats']) > 0:
                     # Get the best quality format
                     formats = [f for f in info['formats'] if f.get('ext', '') == 'mp4']
                     if formats:
-                        return formats[0]['url']
+                        result['url'] = formats[0]['url']
+                        return result
+                    # If no MP4 format, try any format
+                    result['url'] = info['formats'][0]['url']
+                    return result
+                elif 'thumbnail' in info:  # Fallback to thumbnail if no video URL
+                    print("No video found, using thumbnail image")
+                    result['url'] = info['thumbnail']
+                    result['is_image'] = True
+                    return result
                     
-                raise Exception("No suitable video stream found")
+                raise Exception("No suitable media stream found")
                 
         except Exception as e:
             print(f"Attempt {attempt + 1}/{max_retries} failed: {str(e)}")
@@ -115,70 +112,41 @@ def get_video_stream(url, max_retries=1):
             else:
                 print("Max retries reached. Please check if the video URL is valid and accessible.")
                 return None
-            
 
-def extract_frames(video_url, output_folder, num_frames=5):
+def extract_frames(media_info, output_folder, num_frames=5):
+    """Extract frames from videos or images"""
     try:
         # Create output folder if it doesn't exist
         os.makedirs(output_folder, exist_ok=True)
         
-        # Configure OpenCV to use FFmpeg's demuxer
-        cap = cv2.VideoCapture(video_url, cv2.CAP_FFMPEG)
-        if not cap.isOpened():
-            print("Error: Could not open video stream")
-            return False
+        # Handle both string URLs and dictionary format
+        if isinstance(media_info, dict):
+            media_url = media_info['url']
+            platform = media_info.get('platform', 'unknown')
+            is_image = media_info.get('is_image', False)
+            original_url = media_info.get('original_url', None)
+        else:
+            # For backward compatibility
+            media_url = media_info
+            platform = 'unknown'
+            is_image = False
+            original_url = None
         
-        # Read frames sequentially
-        frames_captured = 0
-        frame_count = 0
-        frames_to_skip = 0  # Will be calculated after first frame
+        # Delegate to platform-specific extractors
+        if platform == 'tiktok':
+            return extract_tiktok_frames(media_info, output_folder, num_frames)
+        elif platform == 'bilibili':
+            return extract_bilibili_frames(media_info, output_folder, num_frames)
+        elif platform == 'twitter':
+            return extract_twitter_frames(media_info, output_folder, num_frames)
         
-        while frames_captured < num_frames:
-            ret, frame = cap.read()
-            if not ret:
-                break
-                
-            frame_count += 1
-            
-            # Calculate frames to skip after first frame
-            if frame_count == 1:
-                # Try to get total frames, fallback to estimation
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                if total_frames <= 0:
-                    # Estimate based on FPS and duration
-                    fps = cap.get(cv2.CAP_PROP_FPS)
-                    if fps <= 0:
-                        fps = 30  # Default assumption
-                    duration = 60  # Assume 60 seconds if can't determine
-                    total_frames = int(fps * duration)
-                
-                # Calculate how many frames to skip between captures
-                if total_frames > num_frames:
-                    frames_to_skip = (total_frames // (num_frames + 1)) - 1
-                else:
-                    frames_to_skip = 0
-                
-                # Save first frame
-                frame_path = os.path.join(output_folder, f'frame_{frames_captured+1}.jpg')
-                cv2.imwrite(frame_path, frame)
-                print(f'Saved frame {frames_captured+1} to {frame_path}')
-                frames_captured += 1
-                continue
-            
-            # Skip frames based on calculation
-            if frames_to_skip > 0:
-                if (frame_count - 1) % (frames_to_skip + 1) != 0:
-                    continue
-            
-            # Save frame
-            frame_path = os.path.join(output_folder, f'frame_{frames_captured+1}.jpg')
-            cv2.imwrite(frame_path, frame)
-            print(f'Saved frame {frames_captured+1} to {frame_path}')
-            frames_captured += 1
+        # Handle YouTube and other platforms
+        # If it's an image URL, download and save it directly
+        if is_image:
+            return process_as_image(media_url, output_folder, platform=platform)
         
-        # Release video capture
-        cap.release()
-        return frames_captured > 0
+        # For YouTube and other platforms, try direct streaming
+        return extract_frames_from_video(media_url, output_folder, num_frames)
         
     except Exception as e:
         print(f"Error extracting frames: {str(e)}")
@@ -188,21 +156,21 @@ def extract_frames(video_url, output_folder, num_frames=5):
 
 def main():
     # Get video URL from user
-    url = input("Enter video URL (supports YouTube, Facebook, Instagram, TikTok): ")
+    url = input("Enter video URL (supports YouTube, Facebook, Instagram, TikTok, Twitter/X, Bilibili): ")
     
     # Create output folder for frames
     frames_folder = os.path.join(os.path.dirname(__file__), 'saved_frames', 'output')
     
     # Get video stream URL
     print("Getting video stream...")
-    stream_url = get_video_stream(url)
+    stream_info = get_video_stream(url)
     
-    if stream_url:
+    if stream_info:
         print("Got video stream successfully!")
         
         # Extract frames
         print("Extracting frames...")
-        if extract_frames(stream_url, frames_folder):
+        if extract_frames(stream_info, frames_folder):
             print("Frames extracted successfully!")
     else:
         print("Failed to process video")
@@ -216,7 +184,8 @@ def test_frame_extraction(platform=None):
         'facebook': "https://www.facebook.com/reel/560811526820435",
         'general_website': "https://www.pornhub.com/view_video.php?viewkey=670e028ceb11d",
         'clapper': "https://clapperapp.com/video/GE8opqZnYBgzYne9",
-        'bilibili': "https://www.bilibili.com/video/BV1YG4y17713"
+        'bilibili': "https://www.bilibili.com/video/BV1YG4y17713",
+        'twitter': "https://twitter.com/SpaceX/status/1722401374454882394" # Updated to a tweet with video content
     }
     base_test_folder = os.path.join(os.path.dirname(__file__), 'saved_frames')
     os.makedirs(base_test_folder, exist_ok=True)
@@ -233,12 +202,21 @@ def test_frame_extraction(platform=None):
             print(f"\nTesting {platform_name.capitalize()} URL: {test_url}")
             # Test video stream retrieval
             print("Testing video stream retrieval...")
-            stream_url = get_video_stream(test_url)
-            if not stream_url:
-                print("Failed to get video stream. Skipping frame extraction test.")
+            stream_info = get_video_stream(test_url)
+            if not stream_info:
+                # Special handling for Twitter - it's common for tweets to not have videos
+                if platform_name == 'twitter':
+                    print("Note: This tweet doesn't contain extractable media. This is common for text-only tweets.")
+                    print("For Twitter testing, consider using a tweet URL that contains images or videos.")
+                    print("Skipping frame extraction test for this tweet.")
+                else:
+                    print("Failed to get video stream. Skipping frame extraction test.")
                 continue
             print("Video stream retrieval test passed!")
-            print(f"Stream URL: {stream_url}")
+            if isinstance(stream_info, dict):
+                print(f"Stream URL: {stream_info['url']}")
+            else:
+                print(f"Stream URL: {stream_info}")
             
             # Test frame extraction
             print("Testing frame extraction...")
@@ -251,7 +229,7 @@ def test_frame_extraction(platform=None):
                 if file.startswith('frame_'):
                     os.remove(os.path.join(platform_test_folder, file))
             
-            success = extract_frames(stream_url, platform_test_folder, num_frames=5)
+            success = extract_frames(stream_info, platform_test_folder, num_frames=5)
             if not success:
                 print("Failed to extract frames. Test failed.")
                 continue

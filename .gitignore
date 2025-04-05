@@ -1,6 +1,7 @@
 # Ignore generated image files
 saved_frames/**/*.jpg
 saved_frames/
+test_frames/
 
 # Ignore system files
 .DS_Store
