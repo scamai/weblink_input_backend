@@ -45,7 +45,7 @@ def test_frame_extraction(platform=None):
         'tiktok': "https://www.tiktok.com/@willsmith/video/7481699258819693870",
         'facebook': "https://www.facebook.com/reel/560811526820435",
         'bilibili': "https://www.bilibili.com/video/BV1YG4y17713",
-        'twitter': "https://twitter.com/SpaceX/status/1722401374454882394"
+        'twitter': "https://x.com/Silomare/status/1908928500645449860"
     }
     
     # Create base test folder

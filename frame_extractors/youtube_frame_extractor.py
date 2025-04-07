@@ -185,7 +185,7 @@ def test_frame_extraction(platform=None):
         'general_website': "https://www.pornhub.com/view_video.php?viewkey=670e028ceb11d",
         'clapper': "https://clapperapp.com/video/GE8opqZnYBgzYne9",
         'bilibili': "https://www.bilibili.com/video/BV1YG4y17713",
-        'twitter': "https://twitter.com/SpaceX/status/1722401374454882394" # Updated to a tweet with video content
+        'twitter': "https://twitter.com/elonmusk/status/1677828521746722817" # Updated to a tweet with video content
     }
     base_test_folder = os.path.join(os.path.dirname(__file__), 'saved_frames')
     os.makedirs(base_test_folder, exist_ok=True)

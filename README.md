@@ -57,7 +57,7 @@ pip install -r requirements.txt
 
 ### Basic Usage
 ```bash
-python main.py <url>
+python3 main.py <url>
 ```
 Provide a URL from any supported platform, and the system will automatically detect the platform and extract frames.
 
@@ -65,21 +65,21 @@ Provide a URL from any supported platform, and the system will automatically det
 
 Test all supported platforms:
 ```bash
-python main.py --test
+python3 main.py --test
 ```
 
 Test a specific platform:
 ```bash
-python main.py --test youtube
+python3 main.py --test youtube
 ```
 ```bash
-python main.py --test tiktok
+python3 main.py --test tiktok
 ```
 ```bash
-python main.py --test bilibili
+python3 main.py --test bilibili
 ```
 ```bash
-python main.py --test twitter
+python3 main.py --test twitter
 ```
 
 ## Testing Framework
